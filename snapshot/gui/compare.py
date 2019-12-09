@@ -10,8 +10,8 @@ import re
 from enum import Enum
 
 import numpy
-from PyQt4 import QtGui, QtCore
-from PyQt4.QtCore import Qt
+from PyQt5 import QtGui, QtCore, QtWidgets
+from PyQt5.QtCore import Qt
 
 from ..ca_core import Snapshot, SnapshotPv
 
@@ -24,7 +24,7 @@ class PvCompareFilter(Enum):
     show_eq = 2
 
 
-class SnapshotCompareWidget(QtGui.QWidget):
+class SnapshotCompareWidget(QtWidgets.QWidget):
     pvs_filtered = QtCore.pyqtSignal(list)
     restore_requested = QtCore.pyqtSignal(list)
 
@@ -40,7 +40,7 @@ class SnapshotCompareWidget(QtGui.QWidget):
         #     self.view: visual representation of the PV table
 
         self.view = SnapshotPvTableView(self)
-        self.view.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
+        self.view.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         self.view.restore_requested.connect(self._handle_restore_request)
 
         self.model = SnapshotPvTableModel(snapshot, self)
@@ -58,7 +58,7 @@ class SnapshotCompareWidget(QtGui.QWidget):
         # - check box to select if showing pvs with incomplete data
 
         # #### PV name filter
-        pv_filter_label = QtGui.QLabel("Filter:", self)
+        pv_filter_label = QtWidgets.QLabel("Filter:", self)
         pv_filter_label.setAlignment(Qt.AlignCenter | Qt.AlignRight)
 
         # Select and prepare name filter entry widget:
@@ -66,10 +66,10 @@ class SnapshotCompareWidget(QtGui.QWidget):
         #    if not predefined_filters: create a normal QLineEdit
         predefined_filters = self.common_settings["predefined_filters"]
         if predefined_filters:
-            self.pv_filter_sel = QtGui.QComboBox(self)
+            self.pv_filter_sel = QtWidgets.QComboBox(self)
             self.pv_filter_sel.setEditable(True)
             self.pv_filter_sel.setIconSize(QtCore.QSize(35, 15))
-            sel_layout = QtGui.QHBoxLayout()
+            sel_layout = QtWidgets.QHBoxLayout()
             sel_layout.addStretch()
             self.pv_filter_sel.setLayout(sel_layout)
             self.pv_filter_inp = self.pv_filter_sel.lineEdit()
@@ -78,13 +78,13 @@ class SnapshotCompareWidget(QtGui.QWidget):
             # Add filters
             self.pv_filter_sel.addItem(None)
             for rgx in predefined_filters.get('rgx-filters', list()):
-                self.pv_filter_sel.addItem(QtGui.QIcon(os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                self.pv_filter_sel.addItem(QtWidgets.QIcon(os.path.join(os.path.dirname(os.path.realpath(__file__)),
                                                                     "images/rgx.png")), rgx)
             self.pv_filter_sel.addItems(predefined_filters.get('filters', list()))
             self.pv_filter_sel.currentIndexChanged.connect(self._predefined_filter_selected)
 
         else:
-            self.pv_filter_inp = QtGui.QLineEdit(self)
+            self.pv_filter_inp = QtWidgets.QLineEdit(self)
             self.pv_filter_inp.setPlaceholderText("Filter by PV name")
             self.pv_filter_sel = self.pv_filter_inp
 
@@ -96,35 +96,35 @@ class SnapshotCompareWidget(QtGui.QWidget):
         self._inp_palette_err.setColor(QtGui.QPalette.Base, QtGui.QColor("#F39292"))
 
         # Create a PV name filter layout and add items
-        pv_filter_layout = QtGui.QHBoxLayout()
+        pv_filter_layout = QtWidgets.QHBoxLayout()
         pv_filter_layout.setSpacing(10)
         pv_filter_layout.addWidget(pv_filter_label)
         pv_filter_layout.addWidget(self.pv_filter_sel)
 
         # #### Regex selector
-        self.regex = QtGui.QCheckBox("Regex", self)
+        self.regex = QtWidgets.QCheckBox("Regex", self)
         self.regex.stateChanged.connect(self._handle_regex_change)
 
         # #### Selector for comparison filter
-        self.compare_filter_inp = QtGui.QComboBox(self)
+        self.compare_filter_inp = QtWidgets.QComboBox(self)
         self.compare_filter_inp.addItems(["Show all", "Different only", "Equal only"])
 
         self.compare_filter_inp.currentIndexChanged.connect(self._proxy.set_eq_filter)
         self.compare_filter_inp.setMaximumWidth(200)
 
         # ### Show disconnected selector
-        self.show_disconn_inp = QtGui.QCheckBox("Show disconnected PVs.", self)
+        self.show_disconn_inp = QtWidgets.QCheckBox("Show disconnected PVs.", self)
         self.show_disconn_inp.setChecked(True)
         self.show_disconn_inp.stateChanged.connect(self._proxy.set_disconn_filter)
         self.show_disconn_inp.setMaximumWidth(500)
 
         # ### Put all filter selectors in one layout
-        filter_layout = QtGui.QHBoxLayout()
+        filter_layout = QtWidgets.QHBoxLayout()
         filter_layout.addLayout(pv_filter_layout)
         filter_layout.addWidget(self.regex)
 
-        sep = QtGui.QFrame(self)
-        sep.setFrameShape(QtGui.QFrame.VLine)
+        sep = QtWidgets.QFrame(self)
+        sep.setFrameShape(QtWidgets.QFrame.VLine)
         filter_layout.addWidget(sep)
 
         filter_layout.addWidget(self.compare_filter_inp)
@@ -134,8 +134,8 @@ class SnapshotCompareWidget(QtGui.QWidget):
         filter_layout.setSpacing(10)
 
         # ------- Build main layout ---------
-        layout = QtGui.QVBoxLayout(self)
-        layout.setMargin(10)
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(10,10,10,10)
         layout.setSpacing(10)
         layout.addLayout(filter_layout)
         layout.addWidget(self.view)
@@ -208,7 +208,7 @@ class SnapshotCompareWidget(QtGui.QWidget):
         self._proxy.apply_filter()
 
 
-class SnapshotPvTableView(QtGui.QTableView):
+class SnapshotPvTableView(QtWidgets.QTableView):
     """
     Default visualization of the PV model.
     """
@@ -221,12 +221,12 @@ class SnapshotPvTableView(QtGui.QTableView):
         self.setSortingEnabled(True)
         self.sortByColumn(0, Qt.AscendingOrder)  # default sorting
         self.verticalHeader().setVisible(False)
-        self.horizontalHeader().setMovable(True)
+        self.horizontalHeader().setSectionsMovable(True)
         self.horizontalHeader().setDefaultAlignment(QtCore.Qt.AlignLeft)
         self.verticalHeader().setDefaultSectionSize(20)
         self.horizontalHeader().setDefaultSectionSize(200)
 
-        self.setSelectionBehavior(QtGui.QAbstractItemView.SelectRows)
+        self.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
 
         # ---------- Context menu --------
         self.customContextMenuRequested.connect(self._open_menu)
@@ -266,22 +266,22 @@ class SnapshotPvTableView(QtGui.QTableView):
 
     def _apply_selection_to_full_row(self):
         rows = list()
-        selection = QtGui.QItemSelection()
+        selection = QtCore.QItemSelection()
         for idx in self.selectedIndexes():
             if idx.row() not in rows:
                 rows.append(idx.row())
-                selection.append(QtGui.QItemSelectionRange(idx))
+                selection.append(QtWidgets.QItemSelectionRange(idx))
 
         self.selectionModel().select(selection,
-                                     QtGui.QItemSelectionModel.Rows | QtGui.QItemSelectionModel.ClearAndSelect)
+                                     QtCore.QItemSelectionModel.Rows | QtCore.QItemSelectionModel.ClearAndSelect)
 
     def set_default_visualization(self):
         i = 0
         for i in range(self.model().columnCount()):
             self.setColumnWidth(i, 200)
-            self.horizontalHeader().setResizeMode(i, QtGui.QHeaderView.Interactive)
+            self.horizontalHeader().setSectionResizeMode(i, QtWidgets.QHeaderView.Interactive)
 
-        self.horizontalHeader().setResizeMode(i, QtGui.QHeaderView.Stretch)
+        self.horizontalHeader().setSectionResizeMode(i, QtWidgets.QHeaderView.Stretch)
         self.resizeColumnToContents(0)
         self.setColumnWidth(1, 200)
         self.setColumnWidth(2, 30)
@@ -297,20 +297,20 @@ class SnapshotPvTableView(QtGui.QTableView):
         i = 0
         if n_columns > 3:
             self.setColumnWidth(2, 30)
-            self.horizontalHeader().setResizeMode(2, QtGui.QHeaderView.Interactive)
+            self.horizontalHeader().setSectionResizeMode(2, QtWidgets.QHeaderView.Interactive)
             for i in range(3, self.model().columnCount()):
                 self.setColumnWidth(i, 200)
-                self.horizontalHeader().setResizeMode(i, QtGui.QHeaderView.Interactive)
+                self.horizontalHeader().setSectionResizeMode(i, QtWidgets.QHeaderView.Interactive)
         else:
             i = 2
 
-        self.horizontalHeader().setResizeMode(i, QtGui.QHeaderView.Stretch)
+        self.horizontalHeader().setSectionResizeMode(i, QtWidgets.QHeaderView.Stretch)
 
         self._apply_selection_to_full_row()
 
     def _open_menu(self, point):
         selected_rows = self.selectionModel().selectedRows()
-        menu = QtGui.QMenu(self)
+        menu = QtWidgets.QMenu(self)
 
         if selected_rows:
             menu.addAction("Copy PV name", self._copy_pv_name)
@@ -321,7 +321,7 @@ class SnapshotPvTableView(QtGui.QTableView):
                 menu.addAction("Restore selected PVs", self._restore_selected_pvs)
 
         self._menu_click_pos = point
-        menu.exec(QtGui.QCursor.pos())
+        menu.exec(QtWidgets.QCursor.pos())
 
     def _restore_selected_pvs(self):
         pvs = list()
@@ -336,7 +336,7 @@ class SnapshotPvTableView(QtGui.QTableView):
         self.restore_requested.emit(pvs)
 
     def _copy_pv_name(self):
-        cb = QtGui.QApplication.clipboard()
+        cb = QtWidgets.QApplication.clipboard()
         cb.clear(mode=cb.Clipboard)
         idx = self.indexAt(self._menu_click_pos)
         cb.setText(self._get_pvname_with_selection_model_idx(idx), mode=cb.Clipboard)
@@ -642,7 +642,7 @@ class SnapshotPvTableLine(QtCore.QObject):
         self.data_changed.emit(self)
 
 
-class SnapshotPvFilterProxyModel(QtGui.QSortFilterProxyModel):
+class SnapshotPvFilterProxyModel(QtCore.QSortFilterProxyModel):
     """
     Proxy model providing a custom filtering functionality for PV table
     """
