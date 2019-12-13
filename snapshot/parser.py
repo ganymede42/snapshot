@@ -2,7 +2,6 @@ from snapshot.core import SnapshotError, SnapshotPv
 import os
 import re
 
-
 class SnapshotReqFile(object):
     def __init__(self, path: str, parent=None, macros: dict = None, changeable_macros: list = None):
         """

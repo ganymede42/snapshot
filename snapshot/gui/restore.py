@@ -338,6 +338,7 @@ class SnapshotRestoreFileSelector(QtWidgets.QWidget):
         self.file_selector.setSortingEnabled(False)
         # Rescans directory and adds new/modified files and removes none
         # existing ones from the list.
+        #self.common_settings["save_dir"]='/tmp'
         save_files, err_to_report = self.get_save_files(self.common_settings["save_dir"], self.file_list)
 
         updated_files = self.update_file_list_selector(save_files)
@@ -365,6 +366,22 @@ class SnapshotRestoreFileSelector(QtWidgets.QWidget):
         self.file_selector.setSortingEnabled(True)
         return updated_files
 
+    def gen_index_file(self,path,filebase):
+        'reads the first line of files (meta data) and merges all into an index file'
+        import glob
+        #outStream=open(os.path.join(path, filebase+'.idx'),'w')
+        outStream=open(os.path.join('/tmp/snapshot/', filebase+'.idx'),'w')
+        outStream.write('(\n')
+        for file_path in glob.glob(os.path.join(path, filebase+'*'+self.save_file_sufix)):
+            f=open(file_path)
+            ln=f.readline()
+            outStream.write('('+os.path.basename(file_path)+','+ln[1:-1]+'),\n')
+            pass
+        outStream.seek(outStream.tell()-3)# remove last ','
+        outStream.write(')\n)\n')
+        outStream.close()
+
+
     def get_save_files(self, save_dir, current_files):
         # Parses all new or modified files. Parsed files are returned as a
         # dictionary.
@@ -372,6 +389,7 @@ class SnapshotRestoreFileSelector(QtWidgets.QWidget):
         parsed_save_files = dict()
         err_to_report = list()
         req_file_name = os.path.basename(self.common_settings["req_file_path"])
+        self.gen_index_file(save_dir, os.path.splitext(req_file_name)[0])
         # Check if any file added or modified (time of modification)
         for file_path in glob.glob(os.path.join(save_dir, os.path.splitext(req_file_name)[0])+'*'+self.save_file_sufix):
             file_name=os.path.basename(file_path)
@@ -404,6 +422,8 @@ class SnapshotRestoreFileSelector(QtWidgets.QWidget):
 
                         if err:  # report errors only for matching saved files
                             err_to_report.append((file_name, err))
+                        if len(parsed_save_files)>10:
+                            break
 
         return parsed_save_files, err_to_report
 

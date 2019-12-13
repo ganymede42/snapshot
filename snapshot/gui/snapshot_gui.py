@@ -397,5 +397,5 @@ def start_gui(*args, **kwargs):
 
     # IMPORTANT the reference to the SnapshotGui Object need to be retrieved otherwise the GUI will not show up
     _ = SnapshotGui(*args, **kwargs)
-
-    sys.exit(app.exec_())
+    app.exec_()
+    #sys.exit(app.exec_())

@@ -12,8 +12,9 @@ class TestSnapshotReqFile(unittest.TestCase):
         pass
 
     def test_load(self):
-        request_file = SnapshotReqFile("testfiles/SF_settings.req")
+        #request_file = SnapshotReqFile("testfiles/SF_settings.req")
         # request_file = SnapshotReqFile("testfiles/SF_timing.req")
+        request_file = SnapshotReqFile("/sf/data/applications/snapshot/req/op/SF_settings.req")
         pvs = request_file.read()
 
         pv_dict = dict()
@@ -28,3 +29,15 @@ class TestSnapshotReqFile(unittest.TestCase):
         print()
 
         logging.info(len(pvs))
+
+if __name__ == '__main__':
+    import cProfile, pstats
+    pr = cProfile.Profile()
+    pr.enable()
+    #unittest.main()
+    ts=TestSnapshotReqFile()
+    ts.test_load()
+    pr.disable()
+    sortby = 'cumulative'
+    ps = pstats.Stats(pr).sort_stats(sortby)
+    ps.print_stats()

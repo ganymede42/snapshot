@@ -118,8 +118,14 @@ Can be used as graphical interface tool or a command line tool.'''
 
     args = args_pars.parse_args()
 
+    import cProfile, pstats
+    pr = cProfile.Profile()
+    pr.enable()
     args.func(args)
-
+    pr.disable()
+    sortby = 'cumulative'
+    ps = pstats.Stats(pr).sort_stats(sortby)
+    ps.print_stats()
 
 # Start the application here
 if __name__ == '__main__':
