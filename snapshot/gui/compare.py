@@ -170,9 +170,21 @@ class SnapshotCompareWidget(QtWidgets.QWidget):
         self._proxy.set_name_filter(srch_filter)
 
     def new_selected_files(self, selected_files):
+        print('OBSOLETE new_selected_files -> use sel_changed_files')
         self.model.clear_snap_files()
         self.model.add_snap_files(selected_files)
         self._proxy.apply_filter()
+
+    def sel_changed_files(self,selItems):
+        cs=self.common_settings
+        for item in selItems:
+            meta=item.data(0,0x100)
+            pvs_list=item.data(0,0x101)
+            if pvs_list is None:
+                fn=os.path.join(cs["save_dir"],item.text(1))
+                pvs_list, meta_data, err=self.snapshot.parse_from_save_file(fn)
+                item.setData(0,0x101,pvs_list)
+
 
     def update_shown_files(self, updated_files):
         self.model.update_snap_files(updated_files)

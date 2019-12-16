@@ -4,10 +4,7 @@
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
-import copy
-import datetime
-import os
-import time
+import copy, datetime, os, time, glob, json
 
 from PyQt5 import QtGui, QtCore, QtWidgets
 from PyQt5.QtCore import Qt
@@ -237,6 +234,7 @@ class SnapshotRestoreWidget(QtWidgets.QWidget):
         :param selected_files: list of selected file names
         :return:
         """
+        print('OBSOLETE handle_selected_files')
         if len(selected_files) == 1:
             self.restore_all_button.setEnabled(True)
             self.restore_button.setEnabled(True)
@@ -305,9 +303,9 @@ class SnapshotRestoreFileSelector(QtWidgets.QWidget):
         # Sort by file name (alphabetical order)
         self.file_selector.sortItems(0, Qt.DescendingOrder)
 
-        self.file_selector.itemSelectionChanged.connect(self.select_files)
+        self.file_selector.itemSelectionChanged.connect(self.evt_sel_changed)
         self.file_selector.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.file_selector.customContextMenuRequested.connect(self.open_menu)
+        self.file_selector.customContextMenuRequested.connect(self.evt_open_menu)
 
         # Set column sizes
         self.file_selector.resizeColumnToContents(1)
@@ -364,32 +362,71 @@ class SnapshotRestoreFileSelector(QtWidgets.QWidget):
             msg_window.exec_()
 
         self.file_selector.setSortingEnabled(True)
+        self.start_file_list_update_new()
         return updated_files
 
-    def gen_index_file(self,path,filebase):
+    def start_file_list_update_new(self):
+        self.file_selector.setSortingEnabled(False)
+        # Rescans directory upüdates the files list
+        save_dir = self.common_settings["save_dir"]
+        save_file_prefix = os.path.basename(self.common_settings["save_file_prefix"])
+        existing_labels = self.common_settings["existing_labels"]
+        existing_labels =set(existing_labels)
+        self.gen_index_file(save_dir, save_file_prefix)
+        fhIdx=open(os.path.join('/tmp/snapshot/', save_file_prefix+'.idx'),'r')
+        idx_data=json.load(fhIdx)
+
+        #selector_item=QtWidgets.QTreeWidgetItem([time_, modified_file, comment, " ".join(labels)])
+        itr=QtWidgets.QTreeWidgetItemIterator(self.file_selector)
+        fnSet=set()
+        item=itr.value()
+        while item:
+            fnSet.add(item.text(1))
+            itr+=1;item=itr.value()
+        n=0
+        for fn,meta in idx_data:
+            if fn in fnSet:
+                print('found '+fn)
+            else:
+                print('new '+fn)
+                labels = meta.get("labels", list())
+                comment = meta.get("comment", "")
+                modTime = datetime.datetime.fromtimestamp(os.path.getmtime(os.path.join(save_dir,fn))).strftime('%Y/%m/%d %H:%M:%S')
+                item = QtWidgets.QTreeWidgetItem([modTime, fn, comment, " ".join(labels)])
+                item.setData(0,0x100,meta)
+                self.file_selector.addTopLevelItem(item)
+                existing_labels.update(labels)
+                n+=1
+                if n>10: break
+
+            pass
+
+        self.file_selector.setSortingEnabled(True)
+
+
+    def gen_index_file(self,save_dir,save_file_prefix):
         'reads the first line of files (meta data) and merges all into an index file'
-        import glob
         #outStream=open(os.path.join(path, filebase+'.idx'),'w')
-        outStream=open(os.path.join('/tmp/snapshot/', filebase+'.idx'),'w')
-        outStream.write('(\n')
-        for file_path in glob.glob(os.path.join(path, filebase+'*'+self.save_file_sufix)):
+        outStream=open(os.path.join('/tmp/snapshot/', save_file_prefix+'.idx'),'w')
+        outStream.write('[\n')
+        for file_path in glob.glob(os.path.join(save_dir, save_file_prefix+'*'+self.save_file_sufix)):
             f=open(file_path)
             ln=f.readline()
-            outStream.write('('+os.path.basename(file_path)+','+ln[1:-1]+'),\n')
+            outStream.write('["'+os.path.basename(file_path)+'",'+ln[1:-1]+'],\n')
             pass
         outStream.seek(outStream.tell()-3)# remove last ','
-        outStream.write(')\n)\n')
+        outStream.write(']\n]\n')
         outStream.close()
 
 
     def get_save_files(self, save_dir, current_files):
+        print('OBSOLETE FUNC get_save_files')
         # Parses all new or modified files. Parsed files are returned as a
         # dictionary.
         import glob
         parsed_save_files = dict()
         err_to_report = list()
         req_file_name = os.path.basename(self.common_settings["req_file_path"])
-        self.gen_index_file(save_dir, os.path.splitext(req_file_name)[0])
         # Check if any file added or modified (time of modification)
         for file_path in glob.glob(os.path.join(save_dir, os.path.splitext(req_file_name)[0])+'*'+self.save_file_sufix):
             file_name=os.path.basename(file_path)
@@ -428,13 +465,14 @@ class SnapshotRestoreFileSelector(QtWidgets.QWidget):
         return parsed_save_files, err_to_report
 
     def update_file_list_selector(self, modif_file_list):
+        print('OBSOLETE FUNC update_file_list_selector')
 
         existing_labels = self.common_settings["existing_labels"]
 
         for modified_file, modified_data in modif_file_list.items():
             meta_data = modified_data["meta_data"]
             labels = meta_data.get("labels", list())
-            comment = meta_data.get("comment", "")
+            comment = 'X_'+meta_data.get("comment", "")
             time_ = datetime.datetime.fromtimestamp(modified_data.get("modif_time", 0)).strftime('%Y/%m/%d %H:%M:%S')
 
             # check if already on list (was just modified) and modify file
@@ -497,58 +535,65 @@ class SnapshotRestoreFileSelector(QtWidgets.QWidget):
     def filter_file_list_selector(self):
         file_filter = self.filter_input.file_filter
 
-        for file_name in self.file_list:
-            file_line = self.file_list[file_name]["file_selector"]
-            file_to_filter = self.file_list.get(file_name)
 
-            if not file_filter:
-                file_line.setHidden(False)
-            else:
-                keys_filter = file_filter.get("keys")
-                comment_filter = file_filter.get("comment")
-                name_filter = file_filter.get("name")
 
-                if keys_filter:
-                    keys_status = False
-                    for key in file_to_filter["meta_data"]["labels"]:
-                        # Break when first found
-                        if key and (key in keys_filter):
-                            keys_status = True
-                            break
-                else:
-                    keys_status = True
+        keys_filter=set(file_filter.get("keys"))
+        comment_filter=file_filter.get("comment")
+        name_filter=file_filter.get("name")
+        itr=QtWidgets.QTreeWidgetItemIterator(self.file_selector)
+        item=itr.value()
+        while item:
+            hidden=False
+            fn=item.text(1)
+            meta=item.data(0, 0x100)
+            if meta is None:
+                print('item has no meta data!')
+                meta=dict()
+            if name_filter and not name_filter in fn:
+                hidden=True
+            elif comment_filter and not name_filter in meta.get("comment"):
+                hidden=True
+            elif meta is not None and  keys_filter and not keys_filter.issubset(meta.get('labels')):
+                hidden=True
 
-                if comment_filter:
-                    comment_status = comment_filter in file_to_filter["meta_data"]["comment"]
-                else:
-                    comment_status = True
+            item.setHidden(hidden);itr+=1;item=itr.value()
+        self.file_selector
+        n=0
 
-                if name_filter:
-                    name_status = name_filter in file_name
-                else:
-                    name_status = True
 
-                # Set visibility if any of the filters conditions met
-                file_line.setHidden(
-                    not (name_status and keys_status and comment_status))
-
-    def open_menu(self, point):
-                # Context menu
+    def evt_open_menu(self, point):
+        # event file_selector.customContextMenuRequested
         menu = QtWidgets.QMenu(self)
-        menu.addAction("Delete selected files", self.delete_files)
-        menu.addAction("Edit file meta-data", self.update_file_metadata)
+        menu.addAction("Delete selected files", self.evt_delete_files)
+        menu.addAction("Edit file meta-data", self.evt_update_file_metadata)
         menu.exec(QtWidgets.QCursor.pos())
 
-    def select_files(self):
-        # Pre-process selected items, to a list of files
+    def evt_sel_changed(self):
+        # event file_selector.itemSelectionChanged
         self.selected_files = list()
         if self.file_selector.selectedItems():
             for item in self.file_selector.selectedItems():
                 self.selected_files.append(item.text(1))
 
         self.files_selected.emit(self.selected_files)
+        #return
+        #----------------------
+        selItems=self.file_selector.selectedItems()
+        parent=self.parent
+        if len(selItems) == 1:
+            parent.restore_all_button.setEnabled(True)
+            parent.restore_button.setEnabled(True)
+        else:
+            parent.restore_all_button.setEnabled(False)
+            parent.restore_button.setEnabled(False)
 
-    def delete_files(self):
+        # First update other GUI components (compare widget) and then pass pvs to compare to the snapshot core
+        cw=self.parent.parent().parent().parent().compare_widget
+        cw.sel_changed_files(selItems)
+
+
+    def evt_delete_files(self):
+        # event delete in context menu (evt_open_menu)
         if self.selected_files:
             msg = "Do you want to delete selected files?"
             reply = QtWidgets.QMessageBox.question(self, 'Message', msg, QtWidgets.QMessageBox.Yes, QtWidgets.QMessageBox.No)
@@ -570,7 +615,8 @@ class SnapshotRestoreFileSelector(QtWidgets.QWidget):
                                                   QtWidgets.QMessageBox.Ok,
                                                   QtWidgets.QMessageBox.NoButton)
 
-    def update_file_metadata(self):
+    def evt_update_file_metadata(self):
+        # event 'Edit file meta-data' in context menu (evt_open_menu)
         if self.selected_files:
             if len(self.selected_files) == 1:
                 settings_window = SnapshotEditMetadataDialog(
@@ -589,7 +635,7 @@ class SnapshotRestoreFileSelector(QtWidgets.QWidget):
 
     def clear_file_selector(self):
         self.file_selector.clear()  # Clears and "deselects" itmes on file selector
-        self.select_files()  # Process new,empty list of selected files
+        self.evt_sel_changed()  # Process new,empty list of selected files
         self.pvs = dict()
         self.file_list = dict()
 
