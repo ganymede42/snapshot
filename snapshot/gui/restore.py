@@ -29,11 +29,8 @@ class SnapshotRestoreWidget(QtWidgets.QWidget):
     files_updated = QtCore.pyqtSignal(dict)
     restored_callback = QtCore.pyqtSignal(dict, bool)
 
-    def __init__(self, snapshot, common_settings, parent=None, **kw):
+    def __init__(self, parent=None, **kw):
         QtWidgets.QWidget.__init__(self, parent, **kw)
-
-        self.snapshot = snapshot
-        self.common_settings = common_settings
         self.filtered_pvs = list()
         # dict of available files to avoid multiple openings of one file when
         # not needed.
@@ -46,8 +43,7 @@ class SnapshotRestoreWidget(QtWidgets.QWidget):
         self.setLayout(layout)
 
         # Create list with: file names, comment, labels
-        self.file_selector = SnapshotRestoreFileSelector(snapshot,
-                                                         common_settings, self)
+        self.file_selector = SnapshotRestoreFileSelector(self)
 
         self.file_selector.files_selected.connect(self.handle_selected_files)
 
@@ -71,10 +67,6 @@ class SnapshotRestoreWidget(QtWidgets.QWidget):
         btn_layout.addWidget(self.refresh_button)
         btn_layout.addWidget(self.restore_all_button)
         btn_layout.addWidget(self.restore_button)
-
-        # Link to status widgets
-        self.sts_log = self.common_settings["sts_log"]
-        self.sts_info = self.common_settings["sts_info"]
 
         # Add all widgets to main layout
         layout.addWidget(self.file_selector)
@@ -110,6 +102,7 @@ class SnapshotRestoreWidget(QtWidgets.QWidget):
 
             # Prepare pvs with values to restore
             if file_data:
+                doc=QtWidgets.QApplication.instance().doc
                 pvs_in_file = file_data.get("pvs_list", None)  # is actually a dict
                 pvs_to_restore = copy.copy(file_data.get("pvs_list", None))  # is actually a dict
                 macros = self.snapshot.macros
@@ -119,7 +112,7 @@ class SnapshotRestoreWidget(QtWidgets.QWidget):
                         if SnapshotPv.macros_substitution(pvname, macros) not in pvs_list:
                             pvs_to_restore.pop(pvname, None)  # remove unfiltered pvs
 
-                force = self.common_settings["force"]
+                force = doc.force
 
                 # Try to restore with default force mode.
                 # First disable restore button (will be enabled when finished)
@@ -129,8 +122,9 @@ class SnapshotRestoreWidget(QtWidgets.QWidget):
 
                 # Force updating the GUI and disabling the button before future actions
                 QtCore.QCoreApplication.processEvents()
-                self.sts_log.log_msgs("Restore started.", time.time())
-                self.sts_info.set_status("Restoring ...", 0, "orange")
+                doc=QtWidgets.QApplication.instance().doc
+                doc.sts_log.log_msgs("Restore started.", time.time())
+                doc.sts_info.set_status("Restoring ...", 0, "orange")
 
                 status, pvs_status = self.snapshot.restore_pvs(pvs_to_restore, callback=self.restore_done_callback,
                                                                force=force)
@@ -150,19 +144,19 @@ class SnapshotRestoreWidget(QtWidgets.QWidget):
 
                     else:
                         # User rejected restoring with unconnected PVs. Not an error state.
-                        self.sts_log.log_msgs("Restore rejected by user.", time.time())
-                        self.sts_info.clear_status()
+                        doc.sts_log.log_msgs("Restore rejected by user.", time.time())
+                        doc.sts_info.clear_status()
                         self.restore_all_button.setEnabled(True)
                         self.restore_button.setEnabled(True)
 
                 elif status == ActionStatus.no_data:
-                    self.sts_log.log_msgs("ERROR: Nothing to restore.", time.time())
-                    self.sts_info.set_status("Restore rejected", 3000, "#F06464")
+                    doc.sts_log.log_msgs("ERROR: Nothing to restore.", time.time())
+                    doc.sts_info.set_status("Restore rejected", 3000, "#F06464")
                     self.restore_all_button.setEnabled(True)
                     self.restore_button.setEnabled(True)
 
                 elif status == ActionStatus.busy:
-                    self.sts_log.log_msgs("ERROR: Restore rejected. Previous restore not finished.", time.time())
+                    doc.sts_log.log_msgs("ERROR: Restore rejected. Previous restore not finished.", time.time())
                     self.restore_all_button.setEnabled(True)
                     self.restore_button.setEnabled(True)
 
@@ -193,6 +187,7 @@ class SnapshotRestoreWidget(QtWidgets.QWidget):
     def restore_done(self, status, forced):
         # When snapshot finishes restore, GUI must be updated with
         # status of the restore action.
+        doc=QtWidgets.QApplication.instance().doc
         error = False
         msgs = list()
         msg_times = list()
@@ -213,10 +208,10 @@ class SnapshotRestoreWidget(QtWidgets.QWidget):
                 status_txt = "Restore error"
                 status_background = "#F06464"
 
-        self.sts_log.log_msgs(msgs, msg_times)
+        doc.sts_log.log_msgs(msgs, msg_times)
 
         if not error:
-            self.sts_log.log_msgs("Restore finished.", time.time())
+            doc.sts_log.log_msgs("Restore finished.", time.time())
             status_txt = "Restore done"
             status_background = "#64C864"
 
@@ -225,7 +220,7 @@ class SnapshotRestoreWidget(QtWidgets.QWidget):
         self.restore_button.setEnabled(True)
 
         if status_txt:
-            self.sts_info.set_status(status_txt, 3000, status_background)
+            doc.sts_info.set_status(status_txt, 3000, status_background)
 
     def handle_selected_files(self, selected_files):
         """
@@ -267,14 +262,12 @@ class SnapshotRestoreFileSelector(QtWidgets.QWidget):
 
     files_selected = QtCore.pyqtSignal(list)
 
-    def __init__(self, snapshot, common_settings, parent=None, save_file_sufix=".snap", **kw):
+    def __init__(self, parent=None, save_file_sufix=".snap", **kw):
         QtWidgets.QWidget.__init__(self, parent, **kw)
 
         self.parent = parent
 
-        self.snapshot = snapshot
         self.selected_files = list()
-        self.common_settings = common_settings
         self.save_file_sufix = save_file_sufix
 
         self.file_list = dict()
@@ -285,8 +278,7 @@ class SnapshotRestoreFileSelector(QtWidgets.QWidget):
         self.file_filter["keys"] = list()
         self.file_filter["comment"] = ""
 
-        self.filter_input = SnapshotFileFilterWidget(
-            self.common_settings, self)
+        self.filter_input = SnapshotFileFilterWidget(self)
 
         self.filter_input.file_filter_updated.connect(self.filter_file_list_selector)
 
@@ -336,8 +328,9 @@ class SnapshotRestoreFileSelector(QtWidgets.QWidget):
         self.file_selector.setSortingEnabled(False)
         # Rescans directory and adds new/modified files and removes none
         # existing ones from the list.
-        #self.common_settings["save_dir"]='/tmp'
-        save_files, err_to_report = self.get_save_files(self.common_settings["save_dir"], self.file_list)
+        #doc.save_dir"]='/tmp'
+        doc=QtWidgets.QApplication.instance().doc
+        save_files, err_to_report = self.get_save_files(doc.save_dir, self.file_list)
 
         updated_files = self.update_file_list_selector(save_files)
 
@@ -366,11 +359,12 @@ class SnapshotRestoreFileSelector(QtWidgets.QWidget):
         return updated_files
 
     def start_file_list_update_new(self):
+        doc=QtWidgets.QApplication.instance().doc
         self.file_selector.setSortingEnabled(False)
         # Rescans directory upüdates the files list
-        save_dir = self.common_settings["save_dir"]
-        save_file_prefix = os.path.basename(self.common_settings["save_file_prefix"])
-        existing_labels = self.common_settings["existing_labels"]
+        save_dir = doc.save_dir
+        save_file_prefix = os.path.basename(doc.save_file_prefix)
+        existing_labels = doc.existing_labels
         existing_labels =set(existing_labels)
         self.gen_index_file(save_dir, save_file_prefix)
         fhIdx=open(os.path.join('/tmp/snapshot/', save_file_prefix+'.idx'),'r')
@@ -421,12 +415,13 @@ class SnapshotRestoreFileSelector(QtWidgets.QWidget):
 
     def get_save_files(self, save_dir, current_files):
         print('OBSOLETE FUNC get_save_files')
+        doc=QtWidgets.QApplication.instance().doc
         # Parses all new or modified files. Parsed files are returned as a
         # dictionary.
         import glob
         parsed_save_files = dict()
         err_to_report = list()
-        req_file_name = os.path.basename(self.common_settings["req_file_path"])
+        req_file_name = os.path.basename(doc.req_file_path)
         # Check if any file added or modified (time of modification)
         for file_path in glob.glob(os.path.join(save_dir, os.path.splitext(req_file_name)[0])+'*'+self.save_file_sufix):
             file_name=os.path.basename(file_path)
@@ -434,7 +429,7 @@ class SnapshotRestoreFileSelector(QtWidgets.QWidget):
                 if (file_name not in current_files) or \
                         (current_files[file_name]["modif_time"] != os.path.getmtime(file_path)):
 
-                    pvs_list, meta_data, err = self.snapshot.parse_from_save_file(
+                    pvs_list, meta_data, err = doc.snapshot.parse_from_save_file(
                         file_path)
 
                     # check if we have req_file metadata. This is used to determine which
@@ -466,8 +461,8 @@ class SnapshotRestoreFileSelector(QtWidgets.QWidget):
 
     def update_file_list_selector(self, modif_file_list):
         print('OBSOLETE FUNC update_file_list_selector')
-
-        existing_labels = self.common_settings["existing_labels"]
+        doc=QtWidgets.QApplication.instance().doc
+        existing_labels = doc.existing_labels
 
         for modified_file, modified_data in modif_file_list.items():
             meta_data = modified_data["meta_data"]
@@ -594,13 +589,14 @@ class SnapshotRestoreFileSelector(QtWidgets.QWidget):
 
     def evt_delete_files(self):
         # event delete in context menu (evt_open_menu)
+        doc=QtWidgets.QApplication.instance().doc
         if self.selected_files:
             msg = "Do you want to delete selected files?"
             reply = QtWidgets.QMessageBox.question(self, 'Message', msg, QtWidgets.QMessageBox.Yes, QtWidgets.QMessageBox.No)
             if reply == QtWidgets.QMessageBox.Yes:
                 for selected_file in self.selected_files:
                     try:
-                        file_path = os.path.join(self.common_settings["save_dir"],
+                        file_path = os.path.join(doc.save_dir,
                                                  selected_file)
                         os.remove(file_path)
                         self.file_list.pop(selected_file)
@@ -652,10 +648,9 @@ class SnapshotFileFilterWidget(QtWidgets.QWidget):
     """
     file_filter_updated = QtCore.pyqtSignal()
 
-    def __init__(self, common_settings, parent=None, **kw):
+    def __init__(self, parent=None, **kw):
         QtWidgets.QWidget.__init__(self, parent, **kw)
 
-        self.common_settings = common_settings
         # Create main layout
         layout = QtWidgets.QHBoxLayout(self)
         layout.setContentsMargins(0,0,0,0)
@@ -676,7 +671,7 @@ class SnapshotFileFilterWidget(QtWidgets.QWidget):
         # Labels filter
         key_layout = QtWidgets.QHBoxLayout()
         key_label = QtWidgets.QLabel("Labels:", self)
-        self.keys_input = SnapshotKeywordSelectorWidget(self.common_settings, parent=self)  # No need to force defaults
+        self.keys_input = SnapshotKeywordSelectorWidget(parent=self)  # No need to force defaults
         self.keys_input.setPlaceholderText("label_1 label_2 ...")
         self.keys_input.keywords_changed.connect(self.update_filter)
         key_layout.addWidget(key_label)

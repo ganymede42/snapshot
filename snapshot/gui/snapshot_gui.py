@@ -20,6 +20,9 @@ from .restore import SnapshotRestoreWidget
 from .save import SnapshotSaveWidget
 from .utils import SnapshotConfigureDialog, SnapshotSettingsDialog, DetailedMsgBox
 
+class Doc:
+    '''application document containing most important data and references to main widgets'''
+    pass
 
 class SnapshotGui(QtWidgets.QMainWindow):
     """
@@ -68,12 +71,12 @@ class SnapshotGui(QtWidgets.QMainWindow):
         # common_settings is a dictionary which holds common configuration of
         # the application (such as directory with save files, request file
         # path, etc). It is propagated to other snapshot widgets if needed
-        self.common_settings = dict()
-        self.common_settings["save_file_prefix"] = ""
-        self.common_settings["req_file_path"] = ""
-        self.common_settings["req_file_macros"] = dict()
-        self.common_settings["existing_labels"] = list()  # labels that are already in snap files
-        self.common_settings["force"] = force
+        QtWidgets.QApplication.instance().doc=doc=Doc()
+        doc.save_file_prefix = ""
+        doc.req_file_path = ""
+        doc.req_file_macros = dict()
+        doc.existing_labels = list()  # labels that are already in snap files
+        doc.force = force
 
         if isinstance(default_labels, str):
             default_labels = default_labels.split(',')
@@ -82,14 +85,14 @@ class SnapshotGui(QtWidgets.QMainWindow):
             default_labels = list()
 
         # default labels also in config file? Add them
-        self.common_settings["default_labels"] = list(set(default_labels +
+        doc.default_labels = list(set(default_labels +
                                                           (config.get('labels', dict()).get('labels', list()))))
 
-        self.common_settings["force_default_labels"] = config.get('labels', dict()).get('force-labels', False) \
+        doc.force_default_labels = config.get('labels', dict()).get('force-labels', False) \
                                                        or force_default_labels
 
         # Predefined filters
-        self.common_settings["predefined_filters"] = config.get('filters', dict())
+        doc.predefined_filters = config.get('filters', dict())
 
         macros_ok = True
         if req_file_macros is None:
@@ -117,19 +120,18 @@ class SnapshotGui(QtWidgets.QMainWindow):
                 self.close_gui()
 
         else:
-            self.common_settings["req_file_path"] = os.path.abspath(os.path.join(init_path, req_file_path))
-            self.common_settings["req_file_macros"] = req_file_macros
+            doc.req_file_path = os.path.abspath(os.path.join(init_path, req_file_path))
+            doc.req_file_macros = req_file_macros
 
         # Before creating GUI, snapshot must be initialized.
-        self.snapshot = None
-        self.init_snapshot(self.common_settings["req_file_path"],
-                           self.common_settings["req_file_macros"])
+        self.init_snapshot(doc.req_file_path,
+                           doc.req_file_macros)
 
         if not save_dir:
             # Default save dir (do this once we have valid req file)
-            save_dir = os.path.dirname(self.common_settings["req_file_path"])
+            save_dir = os.path.dirname(doc.req_file_path)
 
-        self.common_settings["save_dir"] = os.path.abspath(save_dir)
+        doc.save_dir = os.path.abspath(save_dir)
 
         # Create main GUI components:
         #         menu bar
@@ -140,7 +142,7 @@ class SnapshotGui(QtWidgets.QMainWindow):
         #       --------------------------------
         #       |            sts_log           |
         #        ______________________________
-        #                   status_bar
+        #                   sts_info
         #
 
         # menu bar
@@ -161,32 +163,28 @@ class SnapshotGui(QtWidgets.QMainWindow):
         menu_bar.addMenu(file_menu)
 
         # Status components are needed by other GUI elements
-        self.status_log = SnapshotStatusLog(self)
-        self.common_settings["sts_log"] = self.status_log
-        self.status_bar = SnapshotStatus(self.common_settings, self)
-        self.common_settings["sts_info"] = self.status_bar
+
+        doc.sts_log = sts_log = SnapshotStatusLog(self)
+        doc.sts_info = sts_info = SnapshotStatus(self)
 
         # Create status log show/hide control and add it to status bar
         self.show_log_control = QtWidgets.QCheckBox("Show status log")
         self.show_log_control.setStyleSheet("background-color: transparent")
-        self.show_log_control.stateChanged.connect(self.status_log.setVisible)
-        self.status_log.setVisible(False)
-        self.status_bar.addPermanentWidget(self.show_log_control)
+        self.show_log_control.stateChanged.connect(sts_log.setVisible)
+        sts_log.setVisible(False)
+        sts_info.addPermanentWidget(self.show_log_control)
 
         # Creating main layout
         # Compare widget. Must be updated in case of file selection
-        self.compare_widget = SnapshotCompareWidget(self.snapshot,
-                                                    self.common_settings, self)
+        self.compare_widget = SnapshotCompareWidget(self)
 
         self.compare_widget.pvs_filtered.connect(self.handle_pvs_filtered)
         self.compare_widget.restore_requested.connect(self._handle_restore_request)
 
-        self.save_widget = SnapshotSaveWidget(self.snapshot,
-                                              self.common_settings, self)
+        self.save_widget = SnapshotSaveWidget(self)
         self.save_widget.saved.connect(self.handle_saved)
 
-        self.restore_widget = SnapshotRestoreWidget(self.snapshot,
-                                                    self.common_settings, self)
+        self.restore_widget = SnapshotRestoreWidget(self)
         # If new files were added to restore list, all elements with Labels
         # should update with new existing labels. Force update for first time
         self.restore_widget.files_updated.connect(self.handle_files_updated)
@@ -205,17 +203,17 @@ class SnapshotGui(QtWidgets.QMainWindow):
         main_splitter = QtWidgets.QSplitter(self)
         main_splitter.addWidget(sr_splitter)
         main_splitter.addWidget(self.compare_widget)
-        main_splitter.addWidget(self.status_log)
+        main_splitter.addWidget(sts_log)
         main_splitter.setOrientation(Qt.Vertical)
 
         # Set default widget and add status bar
         self.setCentralWidget(main_splitter)
-        self.setStatusBar(self.status_bar)
+        self.setStatusBar(sts_info)
 
         # Show GUI and manage window properties
         self.show()
         self.setWindowTitle(
-            os.path.basename(self.common_settings["req_file_path"]) + ' - Snapshot')
+            os.path.basename(doc.req_file_path) + ' - Snapshot')
 
         # Status log default height should be 100px Set with splitter methods
         widgets_sizes = main_splitter.sizes()
@@ -223,13 +221,13 @@ class SnapshotGui(QtWidgets.QMainWindow):
         main_splitter.setSizes(widgets_sizes)
 
     def open_new_req_file(self):
-        configure_dialog = SnapshotConfigureDialog(self, init_path=self.common_settings['req_file_path'],
-                                                   init_macros=self.common_settings['req_file_macros'])
+        configure_dialog = SnapshotConfigureDialog(self, init_path=doc['req_file_path'],
+                                                   init_macros=doc['req_file_macros'])
         configure_dialog.accepted.connect(self.change_req_file)
         configure_dialog.exec_()  # Do not act on rejected
 
     def change_req_file(self, req_file_path, macros):
-        self.status_bar.set_status("Loading new request file ...", 0, "orange")
+        sts_info.set_status("Loading new request file ...", 0, "orange")
         self.set_request_file(req_file_path, macros)
         self.init_snapshot(req_file_path, macros)
 
@@ -240,7 +238,7 @@ class SnapshotGui(QtWidgets.QMainWindow):
 
         self.setWindowTitle(os.path.basename(req_file_path) + ' - Snapshot')
 
-        self.status_bar.set_status("New request file loaded.", 3000, "#64C864")
+        sts_info.set_status("New request file loaded.", 3000, "#64C864")
 
     def handle_saved(self):
         # When save is done, save widget is updated by itself
@@ -248,18 +246,24 @@ class SnapshotGui(QtWidgets.QMainWindow):
         self.restore_widget.update_files()
 
     def set_request_file(self, path: str, macros: dict):
-        self.common_settings["req_file_path"] = path
-        self.common_settings["req_file_macros"] = macros
+        doc=QtWidgets.QApplication.instance().doc
+        doc.req_file_path = path
+        doc.req_file_macros = macros
 
     def init_snapshot(self, req_file_path, req_macros=None):
-        if self.snapshot:
+        doc=QtWidgets.QApplication.instance().doc
+        try:
+            ss=doc.snapshot
+        except AttributeError:
+            pass
+        else:
             # Remove callbacks from existing snapshot
-            self.snapshot.clear_pvs()
+            ss.clear_pvs()
 
         req_macros = req_macros or {}
         reopen_config = False
         try:
-            self.snapshot = Snapshot(req_file_path, req_macros)
+            doc.snapshot=ss=Snapshot(req_file_path, req_macros)
             self.set_request_file(req_file_path, req_macros)
 
         except IOError:
@@ -298,24 +302,25 @@ class SnapshotGui(QtWidgets.QMainWindow):
         self.restore_widget.do_restore(pvs_list)
 
     def open_settings(self):
-        settings_window = SnapshotSettingsDialog(self.common_settings, self)  # Destroyed when closed
+        settings_window = SnapshotSettingsDialog(self)  # Destroyed when closed
         settings_window.new_config.connect(self.handle_new_config)
         settings_window.resize(800, 200)
         settings_window.show()
 
     def handle_new_config(self, config):
+        doc=QtWidgets.QApplication.instance().doc
         for config_name, config_value in config.items():
             if config_name == "macros":
                 self.snapshot.change_macros(config_value)
-                self.common_settings["req_file_macros"] = config_value
+                doc.req_file_macros = config_value
                 # For compare widget this is same as new snapshot
                 self.compare_widget.handle_new_snapshot_instance(self.snapshot)
                 self.restore_widget.handle_selected_files(self.restore_widget.file_selector.selected_files)
             elif config_name == "force":
-                self.common_settings["force"] = config_value
-                self.common_settings["sts_info"].set_status()
+                doc.force = config_value
+                doc.sts_info.set_status()
             elif config_name == "save_dir":
-                self.common_settings["save_dir"] = config_value
+                doc.save_dir = config_value
                 self.restore_widget.clear_update_files()
 
     def handle_pvs_filtered(self, pvs=None):
@@ -355,9 +360,8 @@ class SnapshotStatusLog(QtWidgets.QWidget):
 
 
 class SnapshotStatus(QtWidgets.QStatusBar):
-    def __init__(self, common_settings, parent=None):
+    def __init__(self, parent=None):
         QtWidgets.QStatusBar.__init__(self, parent)
-        self.common_settings = common_settings
         self.setSizeGripEnabled(False)
         self.timer = QtCore.QTimer(self)
         self.timer.timeout.connect(self.clear_status)
@@ -369,8 +373,8 @@ class SnapshotStatus(QtWidgets.QStatusBar):
     def set_status(self, text="Ready", duration=0, background="rgba(0, 0, 0, 30)"):
         # Stop any existing timers
         self.timer.stop()
-
-        if self.common_settings["force"]:
+        doc=QtWidgets.QApplication.instance().doc
+        if doc.force:
             text = "[force mode] " + text
         self.status_txt.setText(text)
         style = "background-color : " + background

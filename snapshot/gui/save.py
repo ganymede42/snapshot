@@ -33,13 +33,10 @@ class SnapshotSaveWidget(QtWidgets.QWidget):
 
     saved = QtCore.pyqtSignal()
 
-    def __init__(self, snapshot, common_settings, parent=None, **kw):
+    def __init__(self, parent=None, **kw):
         QtWidgets.QWidget.__init__(self, parent, **kw)
-
-        self.common_settings = common_settings
-        self.snapshot = snapshot
         self.file_path = None
-
+        doc=QtWidgets.QApplication.instance().doc
         # Default saved file name: If req file name is PREFIX.req, then saved
         # file name is: PREFIX_YYMMDD_hhmmss (holds time info)
         # Get the prefix ... use update_name() later
@@ -74,7 +71,7 @@ class SnapshotSaveWidget(QtWidgets.QWidget):
 
         # Create collapsible group with advanced options,
         # then update output file name and finish adding widgets to layout
-        self.advanced = SnapshotAdvancedSaveSettings("Advanced", self.common_settings, self)
+        self.advanced = SnapshotAdvancedSaveSettings("Advanced", self)
 
         self.name_extension = ''
         self.update_name()
@@ -92,8 +89,8 @@ class SnapshotSaveWidget(QtWidgets.QWidget):
         save_layout.addWidget(self.save_button)
 
         # Status widgets
-        self.sts_log = self.common_settings["sts_log"]
-        self.sts_info = self.common_settings["sts_info"]
+        self.sts_log = doc.sts_log
+        self.sts_info = doc.sts_info
 
         # Add to main layout
         layout.addLayout(extension_layout)
@@ -130,15 +127,15 @@ class SnapshotSaveWidget(QtWidgets.QWidget):
                 labels = list()
                 comment = ""
 
-            force = self.common_settings["force"]
+            force = doc.force
             # Start saving process with default "force" flag and notify when finished
             status, pvs_status = self.snapshot.save_pvs(self.file_path,
                                                         force=force,
                                                         labels=labels,
                                                         comment=comment,
                                                         symlink_path=os.path.join(
-                                                            self.common_settings["save_dir"],
-                                                            self.common_settings["save_file_prefix"] +
+                                                            doc.save_dir,
+                                                            doc.save_file_prefix +
                                                             'latest' + self.save_file_sufix))
 
             if status == ActionStatus.no_conn:
@@ -155,8 +152,8 @@ class SnapshotSaveWidget(QtWidgets.QWidget):
                                                                 labels=labels,
                                                                 comment=comment,
                                                                 symlink_path=os.path.join(
-                                                                    self.common_settings["save_dir"],
-                                                                    self.common_settings["save_file_prefix"] +
+                                                                    doc.save_dir,
+                                                                    doc.save_file_prefix +
                                                                     'latest' + self.save_file_sufix))
 
                     # finished in forced mode
@@ -206,6 +203,7 @@ class SnapshotSaveWidget(QtWidgets.QWidget):
 
     def update_name(self):
         # When file extension is changed, update all corresponding variables
+        doc=QtWidgets.QApplication.instance().doc
         name_extension_inp = self.extension_input.text()
         if not name_extension_inp:
             name_extension_rb = "{TIMESTAMP}" + self.save_file_sufix
@@ -217,15 +215,14 @@ class SnapshotSaveWidget(QtWidgets.QWidget):
 
         # Use manually entered prefix only if advanced options are selected
         if self.advanced.file_prefix_input.text() and self.advanced.isChecked():
-            self.common_settings["save_file_prefix"] = self.advanced.file_prefix_input.text()
+            doc.save_file_prefix = self.advanced.file_prefix_input.text()
         else:
-            self.common_settings["save_file_prefix"] = os.path.split(self.common_settings
-                                                                     ["req_file_path"])[1].split(".")[0] + "_"
+            doc.save_file_prefix = os.path.split(doc.req_file_path)[1].split(".")[0] + "_"
 
-        self.file_path = os.path.join(self.common_settings["save_dir"],
-                                      self.common_settings["save_file_prefix"] +
+        self.file_path = os.path.join(doc.save_dir,
+                                      doc.save_file_prefix +
                                       self.name_extension + self.save_file_sufix)
-        self.file_name_rb.setText(self.common_settings["save_file_prefix"] +
+        self.file_name_rb.setText(doc.save_file_prefix +
                                   name_extension_rb)
 
     def check_file_name_available(self):
@@ -246,7 +243,8 @@ class SnapshotSaveWidget(QtWidgets.QWidget):
 
 
 class SnapshotAdvancedSaveSettings(QtWidgets.QGroupBox):
-    def __init__(self, text, common_settings, parent=None):
+    def __init__(self, text, parent=None):
+        doc=QtWidgets.QApplication.instance().doc
         self.parent = parent
 
         QtWidgets.QGroupBox.__init__(self, text, parent)
@@ -289,8 +287,7 @@ class SnapshotAdvancedSaveSettings(QtWidgets.QGroupBox):
         labels_label.setAlignment(Qt.AlignCenter | Qt.AlignRight)
         labels_label.setMinimumWidth(min_label_width)
         # If default labels are defined, then force default labels
-        self.labels_input = SnapshotKeywordSelectorWidget(common_settings,
-                                                          defaults_only=common_settings['force_default_labels'],
+        self.labels_input = SnapshotKeywordSelectorWidget(defaults_only=doc.force_default_labels,
                                                           parent=self)
         labels_layout.addWidget(labels_label)
         labels_layout.addWidget(self.labels_input)

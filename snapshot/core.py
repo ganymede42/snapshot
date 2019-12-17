@@ -4,7 +4,6 @@ from enum import Enum
 import json
 import logging
 
-
 # Exceptions
 class SnapshotError(Exception):
     """

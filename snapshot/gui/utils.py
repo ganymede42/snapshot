@@ -304,11 +304,10 @@ class SnapshotKeywordSelectorWidget(QtWidgets.QComboBox):
     """
     keywords_changed = QtCore.pyqtSignal()
 
-    def __init__(self, common_settings, defaults_only=False, parent=None):
+    def __init__(self, defaults_only=False, parent=None):
         QtWidgets.QComboBox.__init__(self, parent)
 
         self.defaults_only = defaults_only
-        self.common_settings = common_settings
 
         # data holders
         self.selectedKeywords = list()
@@ -376,11 +375,12 @@ class SnapshotKeywordSelectorWidget(QtWidgets.QComboBox):
     def add_to_selected(self, keyword, force=False):
         # When called, keyword is added to list of selected keywords and
         # new graphical representation is added left to the input field
+        doc=QtWidgets.QApplication.instance().doc
         self.setCurrentIndex(0)
         if not self.defaults_only:
             self.input.setText("")
 
-        default_labels = self.common_settings["default_labels"]
+        default_labels = doc.default_labels
         keyword = keyword.strip()
 
         # Skip if already selected or not in predefined labels if defaults_only (force=True overrides defaults_only)
@@ -414,10 +414,11 @@ class SnapshotKeywordSelectorWidget(QtWidgets.QComboBox):
     def update_suggested_keywords(self):
         # Method to be called when global list of existing labels (keywords)
         # is changed and widget must be updated.
+        doc=QtWidgets.QApplication.instance().doc
         self.clear()
-        labels = list() + self.common_settings["default_labels"]
+        labels = list() + doc.default_labels
         if not self.defaults_only:
-            labels += self.common_settings["existing_labels"]
+            labels += doc.existing_labels
             self.addItem("")
         else:
             self.addItem("Select labels ...")

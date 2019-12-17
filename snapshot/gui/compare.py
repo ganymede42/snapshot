@@ -28,11 +28,9 @@ class SnapshotCompareWidget(QtWidgets.QWidget):
     pvs_filtered = QtCore.pyqtSignal(list)
     restore_requested = QtCore.pyqtSignal(list)
 
-    def __init__(self, snapshot, common_settings, parent=None, **kw):
+    def __init__(self, parent=None, **kw):
         super().__init__(parent, **kw)
-        self.snapshot = snapshot
-        self.common_settings = common_settings
-
+        doc=QtWidgets.QApplication.instance().doc
         # ----------- PV Table -------------
         # PV table consist of:
         #     self.model: holding the data, values, being updated by PV callbacks, etc
@@ -43,13 +41,13 @@ class SnapshotCompareWidget(QtWidgets.QWidget):
         self.view.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         self.view.restore_requested.connect(self._handle_restore_request)
 
-        self.model = SnapshotPvTableModel(snapshot, self)
+        self.model = SnapshotPvTableModel(self)
         self._proxy = SnapshotPvFilterProxyModel(self)
         self._proxy.setSourceModel(self.model)
         self._proxy.filtered.connect(self._handle_filtered)
 
         # Build model and set default visualization on view (column widths, etc)
-        self.model.add_pvs(snapshot.pvs.values())
+        self.model.add_pvs(doc.snapshot.pvs.values())
         self.view.setModel(self._proxy)
 
         # ---------- Filter control elements ---------------
@@ -64,7 +62,7 @@ class SnapshotCompareWidget(QtWidgets.QWidget):
         # Select and prepare name filter entry widget:
         #    if predefined_filters: make a drop down menu but keep the option to enter filter (QComboBox)
         #    if not predefined_filters: create a normal QLineEdit
-        predefined_filters = self.common_settings["predefined_filters"]
+        predefined_filters = doc.predefined_filters
         if predefined_filters:
             self.pv_filter_sel = QtWidgets.QComboBox(self)
             self.pv_filter_sel.setEditable(True)
@@ -176,13 +174,13 @@ class SnapshotCompareWidget(QtWidgets.QWidget):
         self._proxy.apply_filter()
 
     def sel_changed_files(self,selItems):
-        cs=self.common_settings
+        doc=QtWidgets.QApplication.instance().doc
         for item in selItems:
             meta=item.data(0,0x100)
             pvs_list=item.data(0,0x101)
             if pvs_list is None:
-                fn=os.path.join(cs["save_dir"],item.text(1))
-                pvs_list, meta_data, err=self.snapshot.parse_from_save_file(fn)
+                fn=os.path.join(doc.save_dir,item.text(1))
+                pvs_list, meta_data, err=doc.snapshot.parse_from_save_file(fn)
                 item.setData(0,0x101,pvs_list)
 
 
@@ -191,8 +189,8 @@ class SnapshotCompareWidget(QtWidgets.QWidget):
         self._proxy.apply_filter()
 
     def handle_new_snapshot_instance(self, snapshot):
-        self.snapshot = snapshot
-        self.model.snapshot = snapshot
+        doc=QtWidgets.QApplication.instance().doc
+        doc.snapshot = snapshot
         self.model.clear_pvs()
         self.model.add_pvs(snapshot.pvs.values())
         self.view.sortByColumn(0, Qt.AscendingOrder)  # default sorting
@@ -367,9 +365,8 @@ class SnapshotPvTableModel(QtCore.QAbstractTableModel):
     PV change, but rather 5 times per second if some PVs have changed in this time. This increases performance.
     """
 
-    def __init__(self, snapshot: Snapshot, parent=None):
+    def __init__(self, parent=None):
         super().__init__(parent)
-        self.snapshot = snapshot
         self._pvs_lines = dict()
         self._data = list()
         self._headers = ['PV', 'Current value', '']
@@ -460,8 +457,9 @@ class SnapshotPvTableModel(QtCore.QAbstractTableModel):
                     pv_line.change_snap_value(idx, pv_data.get("value", None))
 
     def _replace_macros_on_file_data(self, file_data):
-        if self.snapshot.macros:
-            macros = self.snapshot.macros
+        doc=QtWidgets.QApplication.instance().doc
+        if doc.snapshot.macros:
+            macros = doc.snapshot.macros
         else:
             macros = file_data["meta_data"].get("macros", dict())
 
