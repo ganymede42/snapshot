@@ -47,7 +47,7 @@ class SnapshotCompareWidget(QtWidgets.QWidget):
         self._proxy.filtered.connect(self._handle_filtered)
 
         # Build model and set default visualization on view (column widths, etc)
-        self.model.add_pvs(doc.snapshot.pvs.values())
+        #TODO self.model.add_pvs(doc.snapshot.pvs.values())
         self.view.setModel(self._proxy)
 
         # ---------- Filter control elements ---------------
@@ -175,13 +175,18 @@ class SnapshotCompareWidget(QtWidgets.QWidget):
 
     def sel_changed_files(self,selItems):
         doc=QtWidgets.QApplication.instance().doc
+        #self.model.clear_snap_files()
+        objDict=dict()
         for item in selItems:
+            fn=item.text(1)
             meta=item.data(0,0x100)
             pvs_list=item.data(0,0x101)
             if pvs_list is None:
-                fn=os.path.join(doc.save_dir,item.text(1))
-                pvs_list, meta_data, err=doc.snapshot.parse_from_save_file(fn)
+                pvs_list, meta_data, err=doc.snapshot.parse_from_save_file(os.path.join(doc.save_dir, fn))
                 item.setData(0,0x101,pvs_list)
+            objDict[fn]={'meta_data':meta,'pvs_list':pvs_list}
+        self.model.add_snap_files(objDict)
+        #self._proxy.apply_filter()
 
 
     def update_shown_files(self, updated_files):

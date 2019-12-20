@@ -108,21 +108,21 @@ class SnapshotSettingsDialog(QtWidgets.QWidget):
     new_config = QtCore.pyqtSignal(dict)
 
     def __init__(self, common_settings, parent=None):
-        self.common_settings = common_settings
+        doc=QtWidgets.QApplication.instance().doc
         QtWidgets.QWidget.__init__(self, parent)
         group_box = QtWidgets.QGroupBox("General Snapshot Settings", self)
         group_box.setFlat(False)
         layout = QtWidgets.QVBoxLayout()
         form_layout = QtWidgets.QFormLayout()
         form_layout.setFieldGrowthPolicy(QtWidgets.QFormLayout.AllNonFixedFieldsGrow)
-        form_layout.setMargin(10)
+        form_layout.setContentsMargins(10,10,10,10)
         form_layout.setSpacing(10)
         form_layout.setLabelAlignment(Qt.AlignRight)
 
         # get current values
-        self.curr_macros = self.common_settings["req_file_macros"]
-        self.curr_save_dir = self.common_settings["save_dir"]
-        self.curr_forced = self.common_settings["force"]
+        self.curr_macros = doc.req_file_macros
+        self.curr_save_dir = doc.save_dir
+        self.curr_forced = doc.force
         # Macros
         self.macro_input = QtWidgets.QLineEdit(self)
         self.macro_input.setText(parse_dict_macros_to_text(self.curr_macros))

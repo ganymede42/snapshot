@@ -247,7 +247,8 @@ class SnapshotRestoreWidget(QtWidgets.QWidget):
         self.files_selected.emit(selected_data)
 
     def update_files(self):
-        self.files_updated.emit(self.file_selector.start_file_list_update())
+        #TODO: self.files_updated.emit(self.file_selector.start_file_list_update())
+        pass
 
     def clear_update_files(self):
         self.file_selector.clear_file_selector()
@@ -355,7 +356,6 @@ class SnapshotRestoreFileSelector(QtWidgets.QWidget):
             msg_window.exec_()
 
         self.file_selector.setSortingEnabled(True)
-        self.start_file_list_update_new()
         return updated_files
 
     def start_file_list_update_new(self):
@@ -366,7 +366,6 @@ class SnapshotRestoreFileSelector(QtWidgets.QWidget):
         save_file_prefix = os.path.basename(doc.save_file_prefix)
         existing_labels = doc.existing_labels
         existing_labels =set(existing_labels)
-        self.gen_index_file(save_dir, save_file_prefix)
         fhIdx=open(os.path.join('/tmp/snapshot/', save_file_prefix+'.idx'),'r')
         idx_data=json.load(fhIdx)
 

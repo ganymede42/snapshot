@@ -10,7 +10,7 @@ import os
 import sys
 
 from PyQt5 import QtGui, QtCore, QtWidgets
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QThread
 
 from snapshot.ca_core import Snapshot, parse_macros
 from snapshot.core import SnapshotError
@@ -23,6 +23,21 @@ from .utils import SnapshotConfigureDialog, SnapshotSettingsDialog, DetailedMsgB
 class Doc:
     '''application document containing most important data and references to main widgets'''
     pass
+
+#class PopulateThread(QThread):
+#    def __init__(self,ui):
+#        QThread.__init__(self)
+#        self.ui=ui
+#
+#    def run(self):
+#        import time
+#        count = 0
+#        while count < 5:
+#            time.sleep(1)
+#            print("A Increasing")
+#            count += 1
+#        self.ui.on_populate_ui()
+
 
 class SnapshotGui(QtWidgets.QMainWindow):
     """
@@ -124,8 +139,7 @@ class SnapshotGui(QtWidgets.QMainWindow):
             doc.req_file_macros = req_file_macros
 
         # Before creating GUI, snapshot must be initialized.
-        self.init_snapshot(doc.req_file_path,
-                           doc.req_file_macros)
+        #TODO: self.init_snapshot(doc.req_file_path, doc.req_file_macros)
 
         if not save_dir:
             # Default save dir (do this once we have valid req file)
@@ -148,19 +162,23 @@ class SnapshotGui(QtWidgets.QMainWindow):
         # menu bar
         menu_bar = self.menuBar()
 
-        settings_menu = QtWidgets.QMenu("Snapshot", menu_bar)
-        open_settings_action = QtWidgets.QAction("Settings", settings_menu)
-        open_settings_action.setMenuRole(QtWidgets.QAction.NoRole)
-        open_settings_action.triggered.connect(self.open_settings)
-        settings_menu.addAction(open_settings_action)
-        menu_bar.addMenu(settings_menu)
+        menu = QtWidgets.QMenu("Snapshot", menu_bar)
+        item = QtWidgets.QAction("Settings", menu)
+        item.setMenuRole(QtWidgets.QAction.NoRole)
+        item.triggered.connect(self.on_open_settings)
+        menu.addAction(item)
+        menu_bar.addMenu(menu)
 
-        file_menu = QtWidgets.QMenu("File", menu_bar)
-        open_new_req_file_action = QtWidgets.QAction("Open", file_menu)
-        open_new_req_file_action.setMenuRole(QtWidgets.QAction.NoRole)
-        open_new_req_file_action.triggered.connect(self.open_new_req_file)
-        file_menu.addAction(open_new_req_file_action)
-        menu_bar.addMenu(file_menu)
+        menu = QtWidgets.QMenu("File", menu_bar)
+        item = QtWidgets.QAction("Open", menu)
+        item.setMenuRole(QtWidgets.QAction.NoRole)
+        item.triggered.connect(self.on_open_req_file)
+        menu.addAction(item)
+        item = QtWidgets.QAction("populate_ui", menu)
+        item.setMenuRole(QtWidgets.QAction.NoRole)
+        item.triggered.connect(self.on_populate_ui)
+        menu.addAction(item)
+        menu_bar.addMenu(menu)
 
         # Status components are needed by other GUI elements
 
@@ -219,15 +237,49 @@ class SnapshotGui(QtWidgets.QMainWindow):
         widgets_sizes = main_splitter.sizes()
         widgets_sizes[main_splitter.indexOf(main_splitter)] = 100
         main_splitter.setSizes(widgets_sizes)
+        #https://www.learnpyqt.com/courses/concurrent-execution/multithreading-pyqt-applications-qthreadpool/
+        import time
+        time.sleep(.1)
+        QtWidgets.QApplication.processEvents()
+        self.on_populate_ui()
+        #QtWidgets.QApplication.postEvent(self, QtCore.QEvent(self.on_populate_ui), Qt.LowEventPriority-1)
+        #thread = PopulateThread(self)
+        #thread.finished.connect(app.exit)
+        #thread.start()
+        pass
 
-    def open_new_req_file(self):
-        configure_dialog = SnapshotConfigureDialog(self, init_path=doc['req_file_path'],
-                                                   init_macros=doc['req_file_macros'])
+    def on_populate_ui(self):
+        doc=QtWidgets.QApplication.instance().doc
+        doc.sts_info.set_status("populate file list...", 0, "orange")
+        self.init_snapshot(doc.req_file_path, doc.req_file_macros)
+        wgt=self.restore_widget
+        wgt.files_updated.emit(wgt.file_selector.start_file_list_update())
+        save_dir=doc.save_dir
+        save_file_prefix=os.path.basename(doc.save_file_prefix)
+        doc.sts_info.set_status("generate index file...", 0, "orange")
+        wgt.file_selector.gen_index_file(save_dir, save_file_prefix)
+        doc.sts_info.set_status("load index file...", 0, "orange")
+        wgt.file_selector.start_file_list_update_new()
+
+        wgt=self.compare_widget
+        doc.sts_info.set_status("populate PVs list...", 0, "orange")
+        wgt.model.add_pvs(doc.snapshot.pvs.values())
+        #snapshot/gui/restore.py:        #TODO: self.files_updated.emit(self.file_selector.start_file_list_update())
+        #snapshot/gui/snapshot_gui.py:        #TODO: self.init_snapshot(doc.req_file_path, doc.req_file_macros)
+        #snapshot/gui/compare.py:        #TODO self.model.add_pvs(doc.snapshot.pvs.values())
+        doc.sts_info.set_status("populate ui done.", 3000, "#64C864")
+        pass
+
+    def on_open_req_file(self):
+        doc=QtWidgets.QApplication.instance().doc
+        configure_dialog = SnapshotConfigureDialog(self, init_path=doc.req_file_path,
+                                                   init_macros=doc.req_file_macros)
         configure_dialog.accepted.connect(self.change_req_file)
         configure_dialog.exec_()  # Do not act on rejected
 
     def change_req_file(self, req_file_path, macros):
-        sts_info.set_status("Loading new request file ...", 0, "orange")
+        doc=QtWidgets.QApplication.instance().doc
+        doc.sts_info.set_status("Loading new request file ...", 0, "orange")
         self.set_request_file(req_file_path, macros)
         self.init_snapshot(req_file_path, macros)
 
@@ -238,7 +290,7 @@ class SnapshotGui(QtWidgets.QMainWindow):
 
         self.setWindowTitle(os.path.basename(req_file_path) + ' - Snapshot')
 
-        sts_info.set_status("New request file loaded.", 3000, "#64C864")
+        doc.sts_info.set_status("New request file loaded.", 3000, "#64C864")
 
     def handle_saved(self):
         # When save is done, save widget is updated by itself
@@ -301,7 +353,7 @@ class SnapshotGui(QtWidgets.QMainWindow):
     def _handle_restore_request(self, pvs_list):
         self.restore_widget.do_restore(pvs_list)
 
-    def open_settings(self):
+    def on_open_settings(self):
         settings_window = SnapshotSettingsDialog(self)  # Destroyed when closed
         settings_window.new_config.connect(self.handle_new_config)
         settings_window.resize(800, 200)
